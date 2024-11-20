@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  app:
+    build: ./backend
+    ports:
+      - "9900:9900"
+    volumes:
+      - ./backend:/app  # This maps your local code to the container
+    environment:
+      - FLASK_ENV=development  # This enables development mode, including auto-reloading for Flask
+    command: >
+      sh -c "pip install -r requirements.txt && flask run --host=0.0.0.0 --port=9900"  # Flask will auto-reload in development mode
+
+  frontend:
+    build: ./frontend
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:9900
+    depends_on:
+      - app
+    ports:
+      - "3901:3000"
+    volumes:
+      - ./frontend:/app  # This maps your local frontend code to the container
+    command: >
+      sh -c "npm install && npm start"  # npm start will trigger hot-reloading for the frontend

@@ -1,0 +1,2205 @@
+openapi: 3.0.0
+info:
+  title: System Management API
+  description: 'API for managing courses, tasks, testing, and user functions'
+  version: 1.0.0
+components:
+  securitySchemes:
+    bearerAuth:
+      description: Bearer token using a JWT
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+paths:
+  /course/setup:
+    post:
+      summary: Setup Firebase database with data from CSV
+      tags: [Course Management]
+      description: Accepts a CSV file with user-course data and sets up the Firebase database with this data.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                csv:
+                  type: string
+                  format: binary
+                  description: The CSV file containing user and course data for setup.
+              required:
+                - csv
+      responses:
+        "200":
+          description: Success message detailing actions taken in the setup.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Detailed message of the setup actions.
+                    example: |
+                      Setting up z1234567 as admin for COMP1531;
+                      Setting up z1234568 as student for COMP1531;
+
+    
+  /course/list_students_details:
+    get:
+      summary: Fetch details for each student in a course
+      tags: [Course Management]
+      description: Fetch the zID, first name, and last name of each student enrolled in a specified course.
+      parameters:
+        - name: course_code
+          in: query
+          required: true
+          schema:
+            type: string
+            description: The course code to fetch student details for.
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  students:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        zID:
+                          type: string
+                          description: Student's zID
+                        firstName:
+                          type: string
+                          description: Student's first name
+                        lastName:
+                          type: string
+                          description: Student's last name
+        400:
+          description: Bad Request - Course does not exist
+        401:
+          description: Unauthorized - User is not authorized to view the course
+      security:
+        - bearerAuth: []
+  /course/modify_user_level:
+    post:
+      summary: Modify the user level of one or more users in a course
+      tags: [Course Management]
+      description: Modify the user level (tutor, student) for specified users within a course. Supports adding or removing user levels for multiple users.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code to modify user levels in.
+                students:
+                  type: string
+                  description: A comma-separated list of zIDs to modify user levels for.
+                tutor:
+                  type: boolean
+                  description: "`true` to modify tutor level;   `false` for student level."
+                adding:
+                  type: boolean
+                  description: "`true` to add the user level; `false` to remove."
+                file:
+                  type: string
+                  format: binary
+                  description: A CSV file containing zIDs to modify user levels for, with header "zid".
+      responses:
+        200:
+          description: Success - Modification completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  action:
+                    type: string
+                    description: "Indicates if users were added or removed."
+                    example: added
+                  data:
+                    type: object
+                    properties:
+                      processed:
+                        type: array
+                        items:
+                          type: string
+                        description: List of zIDs successfully processed for the action.
+                      already_in_course:
+                        type: array
+                        items:
+                          type: string
+                        description: List of zIDs that were already assigned the specified role in the course.
+                      not_found:
+                        type: array
+                        items:
+                          type: string
+                        description: List of zIDs that were not found in the system.
+                      not_in_course:
+                        type: array
+                        items:
+                          type: string
+                        description: List of zIDs that were not in the course when attempting removal.
+        401:
+          description: Unauthorized - User is not authorized to modify user levels in the course
+        404:
+          description: Not Found - Course does not exist
+      security:
+        - bearerAuth: []
+  /course/delete_task/{course_code}/{task_name}:
+    delete:
+      summary: Delete a task from a course.
+      tags: [Course Management]
+      description: This route deletes a specified task from the given course, including any related blobs and results.
+      operationId: deleteTask
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The course code from which the task will be deleted.
+        - name: task_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The name of the task to be deleted.
+      responses:
+        '200':
+          description: Successfully deleted the task.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Confirmation message indicating the task deletion.
+        '401':
+          description: Unauthorized access, the user is not allowed to delete the task.
+      security:
+        - bearerAuth: []
+  /course/get_course_titles:
+    post:
+      summary: Get course titles based on course IDs.
+      tags: [Course Management]
+      description: This route returns the titles of courses based on a list of course IDs.
+      operationId: getCourseTitles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: List of course IDs for which titles are requested.
+              required:
+                - course_ids
+      responses:
+        '200':
+          description: Successfully retrieved the course titles.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Course ID.
+                        title:
+                          type: string
+                          description: Course title.
+        '401':
+          description: Unauthorized access due to invalid token.
+        '500':
+          description: Internal server error occurred while processing the request.
+      security:
+        - bearerAuth: []
+        
+  /testing/run_autotest:
+    post:
+      summary: Run autotests for a student's submission
+      tags: [Testing]
+      description: Run autotests on a student's submission for a specific task in a specified course. Only authorized users can execute this.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code where the task is located.
+                task:
+                  type: string
+                  description: The name of the task to be tested.
+                timestamp:
+                  type: string
+                  description: The timestamp of the submission to be tested.
+                zid:
+                  type: string
+                  description: The zID of the student whose submission is to be tested (only required for admin users).
+      responses:
+        200:
+          description: Autotest run successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  autotest_results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        test_name:
+                          type: string
+                          description: The name of the autotest.
+                        passed:
+                          type: boolean
+                          description: Indicates whether the test passed.
+                        output:
+                          type: string
+                          description: Output of the test, including any error messages or differences.
+        401:
+          description: Unauthorized - User is not authorized to run autotests for the course
+        500:
+          description: Server Error - No submissions recorded for the provided parameters
+      security:
+        - bearerAuth: []
+  /testing/run_automark:
+    post:
+      summary: Run automark for a student's submission
+      tags: [Testing]
+      description: Run hidden tests (automark) on a student's submission for a specified task in a course. Only admin users are authorized.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code where the task is located.
+                task:
+                  type: string
+                  description: The name of the task to be tested.
+                timestamp:
+                  type: string
+                  description: The timestamp of the submission to be tested.
+                zid:
+                  type: string
+                  description: The zID of the student whose submission is to be tested.
+      responses:
+        200:
+          description: Automark run successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  automark_results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        test_name:
+                          type: string
+                          description: The name of the automark test.
+                        passed:
+                          type: boolean
+                          description: Indicates whether the test passed.
+                        output:
+                          type: string
+                          description: Output of the test, including any error messages or differences.
+        401:
+          description: Unauthorized - User is not authorized to run automark for the course
+        500:
+          description: Server Error - No submissions recorded or internal server error
+      security:
+        - bearerAuth: []
+        
+  /user/user_level:
+    post:
+      summary: Determine user's level in a course
+      tags: [User Management]
+      description: Checks the caller's user level for a specified course.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code for which to check the user's level.
+      responses:
+        200:
+          description: Successfully determined the user's level
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userLevel:
+                    type: string
+                    enum: ["student", "tutor", "admin"]
+                    description: The user's level in the course.
+        400:
+          description: User is not part of the course or does not exist in the database
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: User is not part of this course
+        401:
+          description: Unauthorized - Token is invalid or user is unauthorized
+        500:
+          description: Server Error - Unknown error
+      security:
+        - bearerAuth: []
+  /user/user_courses:
+    post:
+      summary: Fetch user-associated courses
+      tags: [User Management]
+      description: Returns the list of courses a user is associated with as a student, tutor, or admin, based on the user's JWT token.
+      responses:
+        200:
+          description: Successfully fetched user-associated courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  studentOf:
+                    type: array
+                    items:
+                      type: string
+                    description: List of courses the user is a student of.
+                  tutorOf:
+                    type: array
+                    items:
+                      type: string
+                    description: List of courses the user is a tutor of.
+                  adminOf:
+                    type: array
+                    items:
+                      type: string
+                    description: List of courses the user is an admin of.
+        400:
+          description: Invalid email or user does not exist
+        401:
+          description: Unauthorized - Token is invalid or malformed
+      security:
+        - bearerAuth: []
+  
+  /user/user_register:
+    post:
+      summary: Register or update a user
+      tags: [User Management]
+      description: Handles user registration, or updates an existing user document if one already exists (e.g., if the user was added to courses by an admin before registration).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - firstName
+                - lastName
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: z1234567@unsw.edu.au
+                  description: The email of the user, must follow UNSW zID email format.
+                password:
+                  type: string
+                  format: password
+                  example: password123
+                  description: The user's password.
+                firstName:
+                  type: string
+                  example: John
+                  description: The first name of the user.
+                lastName:
+                  type: string
+                  example: Doe
+                  description: The last name of the user.
+      responses:
+        200:
+          description: User registration or update was successful.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User z1234567 registered successfully
+        400:
+          description: Invalid input provided (e.g., invalid email or missing required fields).
+        500:
+          description: Internal server error occurred during registration.
+  
+  /user/user_name:
+    get:
+      summary: Fetch user details by zID
+      tags: [User Management]
+      description: Retrieves the first name and last name of a user based on their zID, provided the requestor has a valid authorization token.
+      parameters:
+        - name: zID
+          in: query
+          required: true
+          schema:
+            type: string
+            example: z1234567
+          description: The zID of the user whose details are to be fetched.
+      responses:
+        200:
+          description: Successfully retrieved the user details.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  firstName:
+                    type: string
+                    example: John
+                    description: The first name of the user.
+                  lastName:
+                    type: string
+                    example: Doe
+                    description: The last name of the user.
+        400:
+          description: Bad request due to missing zID.
+        401:
+          description: Unauthorized access due to missing or invalid token.
+        404:
+          description: User not found for the given zID.
+      security:
+        - bearerAuth: []
+  /task/create_task:
+    post:
+      summary: Create a task with file restrictions in a specified course
+      tags: [Task Management]
+      description: >
+        Creates a task within a course, including configurations for file restrictions, late policy, and marking weights.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code to create the task in.
+                name:
+                  type: string
+                  description: The name of the task.
+                deadline:
+                  type: string
+                  format: date-time
+                  description: The deadline for the task.
+                max_automark:
+                  type: integer
+                  description: The maximum mark for automated tests.
+                max_style_mark:
+                  type: integer
+                  description: The maximum mark for style evaluation.
+                spec_url:
+                  type: string
+                  format: uri
+                  description: URL for the task specifications document.
+                file_restrictions:
+                  type: object
+                  description: File restrictions for submissions.
+                  properties:
+                    required_files:
+                      type: array
+                      items:
+                        type: string
+                      description: List of files required for submission.
+                    allowed_file_types:
+                      type: array
+                      items:
+                        type: string
+                      description: List of allowed file types.
+                    max_file_size:
+                      type: integer
+                      description: Maximum file size in MB.
+                latePolicy:
+                  type: object
+                  description: Late submission policy.
+                  properties:
+                    percentDeductionPerDay:
+                      type: number
+                      description: Percentage mark deduction per late day.
+                    lateDayType:
+                      type: string
+                      enum: [CALENDAR, BUSINESS]
+                      description: Type of late day counting (calendar or business days).
+                    maxLateDays:
+                      type: integer
+                      description: Maximum number of allowable late days.
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Task created successfully with file restrictions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Task created successfully with file restrictions."
+                  task:
+                    type: object
+                    description: The created task details.
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Course code, task name, and deadline are required."
+        '401':
+          description: Unauthorized - Invalid or expired token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid or expired token."
+        '403':
+          description: Unauthorized - User is not an admin.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Failed to create task: Internal server error."
+
+  /task/query_tasks:
+    get:
+      summary: Fetch all tasks and results for a course
+      tags: [Task Management]
+      description: Fetches a list of all tasks and their results for a given course. This endpoint requires a valid JWT token.
+      parameters:
+        - name: course_code
+          in: query
+          required: true
+          description: The course code for which to fetch the tasks.
+          schema:
+            type: string
+            example: "COMP1531"
+      responses:
+        200:
+          description: Successfully fetched tasks and their results.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          example: "Assignment 1"
+                        deadline:
+                          type: string
+                          format: date-time
+                          example: "2024-12-01T23:59:59Z"
+                        maxAutotestMark:
+                          type: integer
+                          example: 60
+                        maxStyleMark:
+                          type: integer
+                          example: 40
+                        fileRestrictions:
+                          type: object
+                          properties:
+                            allowedFileTypes:
+                              type: array
+                              items:
+                                type: string
+                              example: [".py", ".md"]
+                            maxFileSize:
+                              type: integer
+                              example: 5
+                            requiredFiles:
+                              type: array
+                              items:
+                                type: string
+                              example: ["main.py", "README.md"]
+        400:
+          description: Course code is missing or invalid.
+        401:
+          description: Unauthorized request due to invalid or expired token.
+        500:
+          description: Internal server error when fetching tasks.
+
+  /task/set_task_data:
+    post:
+      summary: Set task data for a given course and task
+      tags: [Task Management]
+      description: >
+        Updates the task data for a specified course and task, including deadline, file restrictions, and late policy settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code where the task is located.
+                name:
+                  type: string
+                  description: The name of the task to update.
+                deadline:
+                  type: string
+                  format: date-time
+                  description: The new deadline for the task.
+                spec_URL:
+                  type: string
+                  format: uri
+                  description: The URL to the task specification.
+                max_automark:
+                  type: integer
+                  description: The maximum mark for automated tests.
+                max_style:
+                  type: integer
+                  description: The maximum mark for style evaluation.
+                file_restrictions:
+                  type: object
+                  description: File restrictions for submissions.
+                  properties:
+                    required_files:
+                      type: array
+                      items:
+                        type: string
+                      description: List of files required for submission.
+                    allowed_file_types:
+                      type: array
+                      items:
+                        type: string
+                      description: List of allowed file types.
+                    max_file_size:
+                      type: integer
+                      description: Maximum file size in MB.
+                late_policy:
+                  type: object
+                  description: Late submission policy.
+                  properties:
+                    percent_deduction_per_day:
+                      type: number
+                      description: Percentage mark deduction per late day.
+                    late_day_type:
+                      type: string
+                      enum: [CALENDAR, BUSINESS]
+                      description: Type of late day counting.
+                    max_late_days:
+                      type: integer
+                      description: Maximum number of allowable late days.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Task data updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Task settings saved."
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Deadline is required."
+        '401':
+          description: Unauthorized - Invalid or missing token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authorization token is missing or invalid."
+        '403':
+          description: Unauthorized - User lacks permissions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '404':
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Task with name ${task_name} not found."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error setting task data: Internal server error."
+
+  /task/task_data/{course_code}/{task_name}:
+    get:
+      summary: Get task data for a specified course and task
+      tags: [Task Management]
+      parameters:
+        - in: path
+          name: course_code
+          required: true
+          schema:
+            type: string
+          description: The course code where the task is located.
+        - in: path
+          name: task_name
+          required: true
+          schema:
+            type: string
+          description: The name of the task to query.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Task data retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  students:
+                    type: array
+                    items:
+                      type: object
+                    description: List of student results for the task.
+                  deadline:
+                    type: string
+                    format: date-time
+                    description: The deadline for the task.
+                  specUrl:
+                    type: string
+                    format: uri
+                    description: The URL to the task specification.
+                  maxAutomark:
+                    type: integer
+                    description: The maximum mark for autotests.
+                  maxStyleMark:
+                    type: integer
+                    description: The maximum mark for style evaluation.
+                  maxTaskMark:
+                    type: integer
+                    description: The maximum mark for the task.
+                  allowedFileTypes:
+                    type: array
+                    items:
+                      type: string
+                    description: List of allowed file types.
+                  maxFileSize:
+                    type: integer
+                    description: Maximum file size in MB.
+                  requiredFiles:
+                    type: array
+                    items:
+                      type: string
+                    description: List of required files.
+        '401':
+          description: Unauthorized - Invalid or missing token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authorization token is missing or invalid."
+        '403':
+          description: Unauthorized - User lacks permissions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '404':
+          description: Task or associated data not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Task data not found."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error fetching task data: Internal server error."
+
+  /task/upload_script:
+    post:
+      summary: Upload a `run.sh` script for a task.
+      tags: [Task Management]
+      description: |
+        Endpoint to upload a `run.sh` script for a specified task to facilitate autotests.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                task:
+                  type: string
+                  description: Task name to upload the script for.
+                course_code:
+                  type: string
+                  description: Course code where the task is located.
+                hidden:
+                  type: boolean
+                  description: Indicates if the script is for automark (true) or autotest (false).
+                script:
+                  type: string
+                  format: binary
+                  description: The `run.sh` file to upload.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Script uploaded successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Script uploaded"
+        '400':
+          description: Invalid request.
+        '401':
+          description: Unauthorized - user is not an admin.
+
+  /task/get_script/{course_code}/{task_name}:
+    get:
+      summary: Retrieve a `run.sh` script for a task.
+      tags: [Task Management]
+      description: |
+        Endpoint to fetch the `run.sh` script associated with a task.
+      parameters:
+        - in: path
+          name: course_code
+          required: true
+          schema:
+            type: string
+          description: Course code where the task is located.
+        - in: path
+          name: task_name
+          required: true
+          schema:
+            type: string
+          description: Task name to query.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Script retrieved successfully.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized - token is invalid.
+        '403':
+          description: Forbidden - user is not an admin.
+        '404':
+          description: Script not found.
+
+  /task/get_test/{course_code}/{task_name}/{test_name}/{hidden}:
+    get:
+      summary: Fetch a specific test for a task in a course
+      tags: [Task Management]
+      description: Retrieves details of a specific test within a task, including the input data, expected output, and other test parameters.
+      parameters:
+        - in: path
+          name: course_code
+          required: true
+          schema:
+            type: string
+          description: The course code in which the task is located.
+        - in: path
+          name: task_name
+          required: true
+          schema:
+            type: string
+          description: The name of the task to query.
+        - in: path
+          name: test_name
+          required: true
+          schema:
+            type: string
+          description: The name of the test to fetch.
+        - in: path
+          name: hidden
+          required: true
+          schema:
+            type: boolean
+          description: Indicates if the test is hidden (automark) or visible (autotest).
+      responses:
+        '200':
+          description: Successfully retrieved the test data.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test_name:
+                    type: string
+                    description: The name of the test.
+                  input:
+                    type: string
+                    description: Input data for the test.
+                  output:
+                    type: string
+                    description: Expected output for the test.
+                  runner_args:
+                    type: array
+                    items:
+                      type: string
+                    description: Runner arguments for the test.
+                  cpu_time:
+                    type: integer
+                    description: CPU time limit for the test.
+                  memory_megabytes:
+                    type: integer
+                    description: Memory limit for the test in megabytes.
+                  isHidden:
+                    type: boolean
+                    description: Indicates if the test is hidden.
+        '401':
+          description: Unauthorized, token is invalid or missing.
+        '404':
+          description: Test not found.
+      security:
+        - bearerAuth: []
+  /task/edit_test/{course_code}/{task_name}/{test_name}/{hidden}:
+    put:
+      summary: Edit a specific test for a task in a course
+      tags: [Task Management]
+      description: Updates the details of a specific test within a task, including input data, expected output, and other test parameters.
+      parameters:
+        - in: path
+          name: course_code
+          required: true
+          schema:
+            type: string
+          description: The course code in which the task is located.
+        - in: path
+          name: task_name
+          required: true
+          schema:
+            type: string
+          description: The name of the task to query.
+        - in: path
+          name: test_name
+          required: true
+          schema:
+            type: string
+          description: The name of the test to edit.
+        - in: path
+          name: hidden
+          required: true
+          schema:
+            type: boolean
+          description: Indicates if the test is hidden (automark) or visible (autotest).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: string
+                  description: New input data for the test.
+                output:
+                  type: string
+                  description: New expected output for the test.
+                runner_args:
+                  type: array
+                  items:
+                    type: string
+                  description: New runner arguments for the test.
+                cpu_time:
+                  type: integer
+                  description: New CPU time limit for the test.
+                memory_megabytes:
+                  type: integer
+                  description: New memory limit for the test.
+                test_name:
+                  type: string
+                  description: New name for the test.
+      responses:
+        '200':
+          description: Successfully updated the test data.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Confirmation message for successful edit.
+        '400':
+          description: Bad request, input data is invalid or test name already exists.
+        '401':
+          description: Unauthorized, token is invalid or missing.
+        '404':
+          description: Test not found.
+      security:
+        - bearerAuth: []
+  /task/delete_test/{course_code}/{task_name}/{hidden}/{test_name}:
+    delete:
+      summary: Delete a test for a task
+      tags: [Task Management]
+      description: Deletes a specific test associated with a task within a course.
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Course code of the task.
+        - name: task_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Task name.
+        - name: hidden
+          in: path
+          required: true
+          schema:
+            type: boolean
+          description: Indicates if the test is for automark (true) or autotest (false).
+        - name: test_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Test name to delete.
+      responses:
+        '200':
+          description: Test successfully deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Test deleted"
+        '401':
+          description: Unauthorized, invalid token.
+        '404':
+          description: Test not found.
+
+  /task/get_test_names/{course_code}/{task_name}/{hidden}:
+    get:
+      summary: Retrieve test names for a task
+      tags: [Task Management]
+      description: Retrieves names of autotests or automarks associated with a specified task.
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Course code of the task.
+        - name: task_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Task name.
+        - name: hidden
+          in: path
+          required: true
+          schema:
+            type: boolean
+          description: Indicates if the tests are for automark (true) or autotest (false).
+      responses:
+        '200':
+          description: List of test names retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  names:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Unauthorized, user is not an admin or has invalid token.
+
+  /task/add_autotest_from_string:
+    post:
+      summary: Add an autotest from string input
+      tags: [Task Management]
+      description: Adds an autotest to a specified task using string inputs for test details.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                task:
+                  type: string
+                  description: Task name to which the test is added.
+                course_code:
+                  type: string
+                  description: Course code of the task.
+                hidden:
+                  type: boolean
+                  description: Indicates if the test is for automark (true) or autotest (false).
+                input:
+                  type: string
+                  description: Input data for the test.
+                output:
+                  type: string
+                  description: Expected output data for the test.
+                runner_args:
+                  type: string
+                  description: Arguments for the test runner.
+                cpu_time:
+                  type: integer
+                  description: CPU time limit for the test.
+                memory_megabytes:
+                  type: integer
+                  description: Memory limit for the test.
+                test_name:
+                  type: string
+                  description: Name of the test.
+      responses:
+        '200':
+          description: Test added successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Test added successfully"
+        '401':
+          description: Unauthorized, user is not an admin.
+        '400':
+          description: Invalid request parameters.
+
+  /task/add_autotest_from_file:
+    post:
+      summary: Add an autotest from file input
+      tags: [Task Management]
+      description: Adds an autotest to a specified task using file inputs for test details.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                task:
+                  type: string
+                  description: Task name to which the test is added.
+                course_code:
+                  type: string
+                  description: Course code of the task.
+                hidden:
+                  type: boolean
+                  description: Indicates if the test is for automark (true) or autotest (false).
+                input:
+                  type: string
+                  format: binary
+                  description: Input file for the test.
+                output:
+                  type: string
+                  format: binary
+                  description: Expected output file for the test.
+                runner_args:
+                  type: string
+                  description: Arguments for the test runner.
+                cpu_time:
+                  type: integer
+                  description: CPU time limit for the test.
+                memory_megabytes:
+                  type: integer
+                  description: Memory limit for the test.
+                test_name:
+                  type: string
+                  description: Name of the test.
+      responses:
+        '200':
+          description: Test added successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Test added successfully"
+        '401':
+          description: Unauthorized, user is not an admin.
+        '400':
+          description: Invalid request parameters.
+  /task/query_result:
+    get:
+      summary: Fetch a student's result for a specific task
+      tags: [Task Management]
+      description: Fetches the result for a student's task in a specified course.
+      parameters:
+        - in: query
+          name: course_code
+          required: true
+          schema:
+            type: string
+          description: The course code where the task is located.
+        - in: query
+          name: student
+          required: true
+          schema:
+            type: string
+          description: The student's zid.
+        - in: query
+          name: task
+          required: true
+          schema:
+            type: string
+          description: The task identifier.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with the student's result.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      result:
+                        type: object
+                        description: Student's result details.
+        '401':
+          description: Unauthorized due to invalid token or user role.
+        '404':
+          description: Result not found.
+
+  /task/update_mark_release:
+    post:
+      summary: Update the mark release status for a student's result
+      tags: [Task Management]
+      description: Changes the mark release status for a specified student's task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code for the task.
+                zid:
+                  type: string
+                  description: The student's zid.
+                task:
+                  type: string
+                  description: The task identifier.
+                release:
+                  type: boolean
+                  description: New mark release status.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Mark release status updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Mark release status updated"
+        '401':
+          description: Unauthorized - user is not an admin.
+        '400':
+          description: Student does not exist or hasn't submitted.
+
+  /task/delete_automark:
+    post:
+      summary: Delete the automark for a student's result
+      tags: [Task Management]
+      description: Deletes the automark data for a specific student's task result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code for the task.
+                zid:
+                  type: string
+                  description: The student's zid.
+                task:
+                  type: string
+                  description: The task identifier.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Automark data deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Automark deleted"
+        '401':
+          description: Unauthorized - user is not an admin.
+        '400':
+          description: Student does not exist or hasn't submitted.
+
+  /task/override_mark:
+    post:
+      summary: Override the marks for a student's result
+      tags: [Task Management]
+      description: Allows an admin to override a student's automark and style mark for a task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code for the task.
+                zid:
+                  type: string
+                  description: The student's zid.
+                task:
+                  type: string
+                  description: The task identifier.
+                new_automark:
+                  type: number
+                  description: The new automark score.
+                new_style:
+                  type: number
+                  description: The new style mark.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Marks updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Marks updated"
+        '401':
+          description: Unauthorized - user is not an admin.
+        '400':
+          description: Student does not exist or hasn't submitted.
+  /task/upload_submissions:
+    put:
+      summary: Uploads files for a given task
+      tags: [Task Management]
+      description: Creates a new directory in storage for the task and course, storing submitted files with a timestamp as the directory name.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  description: The course code where the task is located
+                task:
+                  type: string
+                  description: The name of the task for which files are being uploaded
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: The files to upload
+      responses:
+        '200':
+          description: Files uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  submission_time:
+                    type: string
+                    description: Timestamp of the submission
+        '400':
+          description: Invalid request or file validation failed
+        '401':
+          description: Unauthorized access - invalid or missing token
+
+      security:
+        - bearerAuth: []
+
+  /task/check_submissions:
+    get:
+      summary: Check task submissions
+      tags: [Task Management]
+      description: Retrieves submission details for a specified task and course.
+      parameters:
+        - in: query
+          name: course_code
+          schema:
+            type: string
+          required: true
+          description: The course code where the task is located
+        - in: query
+          name: task
+          schema:
+            type: string
+          required: true
+          description: The name of the task
+      responses:
+        '200':
+          description: Submission details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  submissions:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+        '401':
+          description: Unauthorized access - invalid token or insufficient permissions
+
+      security:
+        - bearerAuth: []
+
+  /task/download_submission_file:
+    post:
+      summary: Download a submission file
+      tags: [Task Management]
+      description: Allows a user to download a submission file from Firebase storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: The absolute path to the file in Firebase Storage
+      responses:
+        '200':
+          description: File download successful
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Bad file path provided
+        '401':
+          description: Unauthorized access - invalid token or insufficient permissions
+        '500':
+          description: Internal server error
+
+      security:
+        - bearerAuth: []
+  /task/generate_csv/{course_code}/{task_name}:
+    get:
+      summary: Generate a CSV file of student results for a task
+      tags: [Task Management]
+      description: Generates a CSV file containing student results for a specific task in a course.
+      operationId: generateCSV
+      parameters:
+        - name: course_code
+          in: path
+          description: The course code in which the task is located.
+          required: true
+          schema:
+            type: string
+        - name: task_name
+          in: path
+          description: The task name to query.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file containing student results.
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Course or task not found.
+        '500':
+          description: Error occurred while generating the CSV.
+      security:
+        - bearerAuth: []
+  
+  /task/set_file_restrictions:
+    post:
+      summary: Save file restrictions for a course and task
+      tags: [Task Management]
+      description: Saves file restrictions, including allowed file types, maximum file size, and required file names for a task in a course.
+      operationId: setFileRestrictions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                task:
+                  type: string
+                required_files:
+                  type: array
+                  items:
+                    type: string
+                allowed_file_types:
+                  type: array
+                  items:
+                    type: string
+                max_file_size:
+                  type: integer
+      responses:
+        '200':
+          description: File restrictions saved successfully.
+        '400':
+          description: Missing course code or task name.
+        '401':
+          description: Missing or invalid authorization token.
+        '403':
+          description: Unauthorized action.
+        '500':
+          description: Error saving file restrictions.
+      security:
+        - bearerAuth: []
+
+  /task/get_file_restrictions:
+    get:
+      summary: Fetch file restrictions for a course and task
+      tags: [Task Management]
+      description: Fetches the file restrictions, including allowed file types, maximum file size, and required file names for a task in a course.
+      operationId: getFileRestrictions
+      parameters:
+        - name: course_code
+          in: query
+          description: The course code in which the task is located.
+          required: true
+          schema:
+            type: string
+        - name: task
+          in: query
+          description: The task name to query.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File restrictions retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requiredFiles:
+                    type: array
+                    items:
+                      type: string
+                  allowedFileTypes:
+                    type: array
+                    items:
+                      type: string
+                  maxFileSize:
+                    type: integer
+        '400':
+          description: Missing course code or task name.
+        '401':
+          description: Missing or invalid authorization token.
+        '403':
+          description: Unauthorized action.
+        '404':
+          description: Task not found.
+        '500':
+          description: Error fetching file restrictions.
+      security:
+        - bearerAuth: []
+  /task/set_late_policy/{course_code}:
+    post:
+      summary: Set the late submission policy for a course
+      tags: [Task Management]
+      description: |
+        Sets the late submission policy for a specified course, including percentage deduction per day, type of late days, and the maximum number of late days allowed.
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          description: The course code to which the late policy will be applied.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                percentDeductionPerDay:
+                  type: number
+                  description: The percentage deduction applied for each late day.
+                  example: 20
+                lateDayType:
+                  type: string
+                  enum: ["CALENDAR", "BUSINESS"]
+                  description: The type of days to be counted as late days.
+                  example: "CALENDAR"
+                maxLateDays:
+                  type: integer
+                  description: The maximum number of late days allowed.
+                  example: 5
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Late policy updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Late policy updated successfully"
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid percentage deduction"
+        '403':
+          description: Unauthorized access - user is not an admin.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Database update failed"
+  /task/special_consideration/{course_code}/{task_name}:
+    post:
+      summary: Add special consideration for a student
+      tags: [Task Management]
+      description: Adds a special consideration for a specific task and student in the course.
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          description: The course code where the task is located.
+          schema:
+            type: string
+        - name: task_name
+          in: path
+          required: true
+          description: The name of the task for which the special consideration is being managed.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                studentZid:
+                  type: string
+                  description: The student's zID.
+                  example: "z1234567"
+                extensionHours:
+                  type: integer
+                  description: The number of hours of extension granted.
+                  example: 24
+                reason:
+                  type: string
+                  description: The reason for granting the special consideration.
+                  example: "Medical emergency"
+                documentation:
+                  type: string
+                  description: Optional documentation URL.
+                  example: "https://example.com/documentation.pdf"
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Special consideration added successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Special consideration added successfully"
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Missing required fields"
+        '403':
+          description: Unauthorized access - user is not an admin.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Database update failed"
+
+    get:
+      summary: Retrieve special considerations
+      tags: [Task Management]
+      description: Retrieves special considerations for a specific student or all students for a task.
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          description: The course code where the task is located.
+          schema:
+            type: string
+        - name: task_name
+          in: path
+          required: true
+          description: The name of the task for which the special consideration is being managed.
+          schema:
+            type: string
+        - name: studentZid
+          in: query
+          required: false
+          description: The student's zID to retrieve their special consideration. If omitted, retrieves all students' special considerations.
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Special considerations retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specialConsideration:
+                    type: object
+                    description: The special consideration for the student.
+                    example: 
+                      studentZid: "z1234567"
+                      extensionHours: 24
+                      reason: "Medical emergency"
+                      documentation: "https://example.com/documentation.pdf"
+                      approvedBy: "z7654321"
+                      approvedAt: "2024-11-17T10:00:00+11:00"
+                      status: "APPROVED"
+                  specialConsiderations:
+                    type: array
+                    description: List of all special considerations.
+                    items:
+                      type: object
+        '404':
+          description: No special consideration found.
+        '500':
+          description: Internal server error.
+
+    delete:
+      summary: Remove special consideration
+      tags: [Task Management]
+      description: Removes a special consideration for a specific student and task.
+      parameters:
+        - name: course_code
+          in: path
+          required: true
+          description: The course code where the task is located.
+          schema:
+            type: string
+        - name: task_name
+          in: path
+          required: true
+          description: The name of the task for which the special consideration is being managed.
+          schema:
+            type: string
+        - name: studentZid
+          in: query
+          required: true
+          description: The student's zID whose special consideration is to be removed.
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Special consideration removed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Special consideration removed successfully"
+        '400':
+          description: Missing required fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Student zID required"
+        '403':
+          description: Unauthorized access - user is not an admin.
+        '500':
+          description: Internal server error.
+  /task/get_tolerance_filters:
+    get:
+      summary: Retrieve tolerance filters for a course and task
+      tags: [Task Management]
+      description: Fetches the tolerance filters configured for a specific task within a course.
+      parameters:
+        - name: courseCode
+          in: query
+          required: true
+          description: The course code in which the task is located.
+          schema:
+            type: string
+        - name: task
+          in: query
+          required: true
+          description: The task name to retrieve tolerance filters for.
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Tolerance filters retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trailingNewline:
+                    type: boolean
+                    description: Whether trailing newlines are ignored.
+                    example: true
+                  trailingWhitespaces:
+                    type: boolean
+                    description: Whether trailing whitespaces are ignored.
+                    example: false
+                  whitespacesAmount:
+                    type: boolean
+                    description: Whether the amount of whitespaces is ignored.
+                    example: true
+                  caseDifferences:
+                    type: boolean
+                    description: Whether case differences are ignored.
+                    example: true
+        '400':
+          description: Invalid request due to missing parameters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Course code or task name is missing."
+        '403':
+          description: Unauthorized access - user is not an admin.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '404':
+          description: Task or tolerance filters not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Task not found."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error getting tolerance filters: database connection failed."
+
+  /task/set_tolerance_filters:
+    put:
+      summary: Set tolerance filters for a course and task
+      tags: [Task Management]
+      description: Saves or updates tolerance filters for a specific task within a course.
+      parameters:
+        - name: courseCode
+          in: query
+          required: true
+          description: The course code in which the task is located.
+          schema:
+            type: string
+        - name: task
+          in: query
+          required: true
+          description: The task name to set tolerance filters for.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trailingNewline:
+                  type: boolean
+                  description: Whether to ignore trailing newlines.
+                  example: true
+                trailingWhitespaces:
+                  type: boolean
+                  description: Whether to ignore trailing whitespaces.
+                  example: false
+                whitespacesAmount:
+                  type: boolean
+                  description: Whether to ignore the amount of whitespaces.
+                  example: true
+                caseDifferences:
+                  type: boolean
+                  description: Whether to ignore case differences.
+                  example: false
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Tolerance filters saved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Tolerance filter settings saved successfully."
+        '400':
+          description: Invalid request due to missing parameters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Course code or task name is missing."
+        '403':
+          description: Unauthorized access - user is not an admin.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Unauthorized"
+        '404':
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Task not found."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error setting tolerance filters: database write failed."
+
+
+security:
+  - bearerAuth: []
+
+servers:
+  # Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/ALXXWU_1/management/1.0.0/api

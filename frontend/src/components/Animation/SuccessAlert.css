@@ -1,0 +1,90 @@
+.success-alert {
+  border: 1px solid rgba(24, 130, 4, 0.6);
+  background-color: rgba(5, 102, 45, 0.15);
+  color: #0c9e05;
+  transition: 0.5s;
+  cursor: pointer;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 300;
+  position: relative;
+  padding-left: 20px;
+  overflow: hidden;
+}
+
+.success-alert:hover {
+  background-color: rgba(5, 102, 45, 0.35);
+  transition: 0.5s;
+}
+
+.success-alert:before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: calc(100% - 44px);
+  border-left: 1px solid;
+  border-right: 2px solid;
+  border-bottom-right-radius: 3px;
+  border-top-right-radius: 3px;
+  left: 0;
+  top: 50%;
+  transform: translate(0,-50%);
+  height: 20px;
+}
+
+.success-alert .close-icon {
+  font-size: 18px;
+  color: #1fad07;
+  text-shadow: none;
+  animation: blink-1 2s infinite both;
+}
+
+.success-alert .check-icon {
+  margin-right: 10px;
+  animation: shake 0.82s cubic-bezier(.36,.07,.19,.97) both;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.success-alert .loading-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background-color: #0c9e05;
+  animation: loading 5s linear;
+}
+
+@keyframes loading {
+  0% {
+      width: 0;
+  }
+  100% {
+      width: 100%;
+  }
+}
+
+@keyframes shake {
+  10%, 90% {
+      transform: translate3d(-1px, 0, 0);
+  }
+  20%, 80% {
+      transform: translate3d(2px, 0, 0);
+  }
+  30%, 50%, 70% {
+      transform: translate3d(-4px, 0, 0);
+  }
+  40%, 60% {
+      transform: translate3d(4px, 0, 0);
+  }
+}
+
+@keyframes blink-1 {
+  0%, 50%, 100% {
+      opacity: 1;
+  }
+  25%, 75% {
+      opacity: 0;
+  }
+}
